@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>爆速！一問一答トレーニング</title>
+    <style>
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; background-color: #f0f2f5; padding: 20px; color: #333; }
+        .container { max-width: 700px; margin: 0 auto; background: white; padding: 25px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        h1, h2 { text-align: center; color: #1a73e8; }
+        
+        /* 入力エリア */
+        .form-section { background: #f8f9fa; padding: 15px; border-radius: 10px; margin-bottom: 20px; border: 1px solid #dee2e6; }
+        .form-group { margin-bottom: 10px; }
+        label { font-weight: bold; font-size: 0.9em; }
+        input, select, textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
+        
+        button { cursor: pointer; border: none; border-radius: 5px; font-weight: bold; transition: 0.2s; }
+        .btn-main { width: 100%; padding: 12px; background: #1a73e8; color: white; font-size: 16px; }
+        .btn-main:hover { background: #1557b0; }
+
+        /* クイズ実行エリア */
+        .quiz-card { display: none; border: 3px solid #1a73e8; padding: 20px; border-radius: 12px; text-align: center; position: relative; }
+        .timer { font-size: 24px; color: #d93025; font-weight: bold; margin-bottom: 10px; }
+        .question-text { font-size: 1.4em; margin-bottom: 20px; min-height: 60px; display: flex; align-items: center; justify-content: center; }
+        .answer-input-group { display: flex; gap: 5px; margin-bottom: 15px; }
+        
+        /* リザルトエリア */
+        .result-screen { display: none; text-align: center; padding: 20px; }
+        .score { font-size: 32px; color: #188038; font-weight: bold; }
+
+        /* リスト表示 */
+        .list-section { margin-top: 30px; font-size: 0.85em; }
+        .quiz-item { display: flex; justify-content: space-between; padding: 8px; border-bottom: 1px solid #eee; }
+        .btn-del { background: #ea4335; color: white; padding: 2px 8px; border-radius: 3px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>一問一答トレーニング</h1>
+
+    <div class="form-section">
+        <div class="form-group">
+            <select id="subject">
+                <option value="数学">数学</option><option value="英語">英語</option>
+                <option value="国語">国語</option><option value="理科">理科</option><option value="社会">社会</option>
+            </select>
+        </div>
+        <input type="text" id="question" placeholder="問題を入力" style="margin-bottom:10px;">
+        <input type="text" id="answer" placeholder="答えを入力">
+        <button class="btn-main" onclick="addQuiz()" style="margin-top:10px;">問題を追加</button>
+    </div>
+
+    <hr>
+
+    <div id="setupArea">
+        <h2>挑戦する</h2>
+        <select id="selectSubject" style="margin-bottom:10px;">
+            <option value="all">全教科からランダム</option>
+            <option value="数学">数学</option><option value="英語">英語</option>
+            <option value="国語">国語</option><option value="理科">理科</option><option value="社会">社会</option>
+        </select>
+        <button class="btn-main" onclick="startQuiz()" style="background:#34a853;">スタート (1問10秒)</button>
+    </div>
+
+    <div id="quizArea" class="quiz-card">
+        <div id="timerDisplay" class="timer">残り 10 秒</div>
+        <div id="qText" class="question-text"></div>
+        <div class="answer-input-group">
+            <input type="text" id="userInput" placeholder="答えを入力してEnter" onkeypress="if(event.keyCode==13) checkAnswer()">
+            <button onclick="checkAnswer()" style="background:#1a73e8; color:white; padding:0 20px;">決定</button>
+        </div>
+        <div id="feedback" style="font-weight:bold;"></div>
+    </div>
+
+    <div id="resultArea" class="result-screen">
+        <h2>結果発表</h2>
+        <div class="score" id="scoreDisplay"></div>
+        <button class="btn-main" onclick="location.reload()" style="margin-top:20px;">もう一度 / 戻る</button>
+    </div>
+
+    <div class="list-section" id="listArea">
+        <h3>登録済みリスト</h3>
+        <div id="quizList"></div>
+    </div>
+</div>
+
+<script>
+    let quizzes = JSON.parse(localStorage.getItem('quizzes')) || [];
+    let currentFiltered = [];
+    let currentIndex = 0;
+    let score = 0;
+    let timer;
+    let timeLeft = 10;
+
+    window.onload = displayList;
+
+    function addQuiz() {
+        const subject = document.getElementById('subject').value;
+        const question = document.getElementById('question').value;
+        const answer = document.getElementById('answer').value;
+        if (!question || !answer) return alert("入力してください");
+        quizzes.push({ subject, question, answer });
+        localStorage.setItem('quizzes', JSON.stringify(quizzes));
+        displayList();
+        document.getElementById('question').value = "";
+        document.getElementById('answer').value = "";
+    }
+
+    function displayList() {
+        const listDiv = document.getElementById('quizList');
+        listDiv.innerHTML = quizzes.map((q, i) => `
+            <div class="quiz-item">
+                <span>[${q.subject}] ${q.question}</span>
+                <button class="btn-del" onclick="deleteQuiz(${i})">削除</button>
+            </div>
+        `).join('');
+    }
+
+    function deleteQuiz(i) {
+        quizzes.splice(i, 1);
+        localStorage.setItem('quizzes', JSON.stringify(quizzes));
+        displayList();
+    }
+
+    // クイズ開始
+    function startQuiz() {
+        const sel = document.getElementById('selectSubject').value;
+        currentFiltered = (sel === 'all') ? [...quizzes] : quizzes.filter(q => q.subject === sel);
+        
+        if (currentFiltered.length === 0) return alert("問題がありません");
+        
+        // シャッフル
+        currentFiltered.sort(() => Math.random() - 0.5);
+        
+        currentIndex = 0;
+        score = 0;
+        document.getElementById('setupArea').style.display = "none";
+        document.getElementById('listArea').style.display = "none";
+        document.getElementById('quizArea').style.display = "block";
+        nextQuestion();
+    }
+
+    function nextQuestion() {
+        if (currentIndex >= currentFiltered.length) {
+            return finishQuiz();
+        }
+        
+        document.getElementById('feedback').innerText = "";
+        document.getElementById('userInput').value = "";
+        document.getElementById('userInput').focus();
+        document.getElementById('qText').innerText = `Q${currentIndex+1}: ${currentFiltered[currentIndex].question}`;
+        
+        startTimer();
+    }
+
+    function startTimer() {
+        clearInterval(timer);
+        timeLeft = 10;
+        document.getElementById('timerDisplay').innerText = `残り ${timeLeft} 秒`;
+        
+        timer = setInterval(() => {
+            timeLeft--;
+            document.getElementById('timerDisplay').innerText = `残り ${timeLeft} 秒`;
+            if (timeLeft <= 0) {
+                clearInterval(timer);
+                checkAnswer(true); // 時間切れ
+            }
+        }, 1000);
+    }
+
+    function checkAnswer(isTimeOut = false) {
+        clearInterval(timer);
+        const userAns = document.getElementById('userInput').value.trim();
+        const correctAns = currentFiltered[currentIndex].answer.trim();
+
+        if (!isTimeOut && userAns === correctAns) {
+            score++;
+            document.getElementById('feedback').innerText = "⭕ 正解！";
+            document.getElementById('feedback').style.color = "green";
+        } else {
+            document.getElementById('feedback').innerText = isTimeOut ? `❌ 時間切れ！(正解: ${correctAns})` : `❌ 不正解！(正解: ${correctAns})`;
+            document.getElementById('feedback').style.color = "red";
+        }
+
+        setTimeout(() => {
+            currentIndex++;
+            nextQuestion();
+        }, 1500); // 1.5秒後に次の問題へ
+    }
+
+    function finishQuiz() {
+        document.getElementById('quizArea').style.display = "none";
+        document.getElementById('resultArea').style.display = "block";
+        document.getElementById('scoreDisplay').innerText = `${currentFiltered.length}問中 ${score}問 正解！`;
+    }
+</script>
+
+</body>
+</html>
